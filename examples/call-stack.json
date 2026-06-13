@@ -1,0 +1,38 @@
+{
+  "version": "1",
+  "invocationId": "inv_demo_pharos_yield_chain",
+  "timestamp": 1718123456789,
+  "frames": [
+    {
+      "skillId": "pharos-yield-pilot",
+      "creator": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+      "contributionWeight": 10000,
+      "depth": 0,
+      "signature": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "skillId": "pharos-realfi-security-scout",
+      "creator": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+      "contributionWeight": 7500,
+      "depth": 1,
+      "parentSkillId": "pharos-yield-pilot",
+      "signature": "0x0000000000000000000000000000000000000000000000000000000000000001"
+    },
+    {
+      "skillId": "pharos-cross-chain-rwa-distribution-oracle",
+      "creator": "0x90F79bf6EB2c4f870365E785982E1f101E93b906",
+      "contributionWeight": 8200,
+      "depth": 2,
+      "parentSkillId": "pharos-realfi-security-scout",
+      "signature": "0x0000000000000000000000000000000000000000000000000000000000000002"
+    },
+    {
+      "skillId": "pharos-intent-yield-rebalancer",
+      "creator": "0x15d34AAf54267DB7D7c367839AAf71A00a2C6A65",
+      "contributionWeight": 6800,
+      "depth": 3,
+      "parentSkillId": "pharos-cross-chain-rwa-distribution-oracle",
+      "signature": "0x0000000000000000000000000000000000000000000000000000000000000003"
+    }
+  ]
+}
