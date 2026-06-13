@@ -1,0 +1,29 @@
+{
+  "defaultNetwork": "pharos-mainnet",
+  "networks": {
+    "pharos-mainnet": {
+      "name": "Pharos Mainnet",
+      "chainId": 1672,
+      "rpcUrl": "https://rpc.pharos.xyz",
+      "explorer": "https://pharosscan.xyz",
+      "nativeCurrency": {
+        "name": "Pharos",
+        "symbol": "PHRS",
+        "decimals": 18
+      },
+      "usdc": "0xC879C018dB60520F4355C26eD1a6D572cdAC1815"
+    },
+    "pharos-atlantic": {
+      "name": "Pharos Atlantic Testnet",
+      "chainId": 688689,
+      "rpcUrl": "https://atlantic.dplabs-internal.com",
+      "explorer": "",
+      "nativeCurrency": {
+        "name": "GAS",
+        "symbol": "GAS",
+        "decimals": 18
+      },
+      "usdc": ""
+    }
+  }
+}
