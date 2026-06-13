@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "fabric-api",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start"],
+      "port": 4020
+    }
+  ]
+}
