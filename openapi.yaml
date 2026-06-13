@@ -1,0 +1,598 @@
+openapi: 3.0.3
+info:
+  title: Pharos Inter-Agent Revenue Fabric API
+  description: |
+    Inter-agent revenue mesh for the Pharos AI economy. Traces recursive skill
+    dependency trees, calculates contribution-weighted perpetual royalties, routes
+    x402 USDC micropayments to skill creators, and exposes a public Skill Economy Graph.
+
+    **Anvita Flow integration:** Import this spec as an HTTP tool/action source.
+    All endpoints return standard JSON suitable for visual workflow builders.
+  version: 1.1.0
+  contact:
+    name: Pharos Agent Center
+  license:
+    name: MIT-0
+
+servers:
+  - url: http://localhost:4020
+    description: Local development
+
+tags:
+  - name: Health
+    description: Liveness and chain connectivity
+  - name: Trace
+    description: Revenue mesh tracing and x402 payment routing
+  - name: Register
+    description: On-chain skill registration with contribution weights
+  - name: Graph
+    description: Public Skill Economy Graph
+  - name: Verify
+    description: Payment provenance verification
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Always returns 200. Body reports Pharos RPC and registry status.
+      operationId: getHealth
+      responses:
+        '200':
+          description: Service is up (ok or degraded)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /trace:
+    post:
+      tags: [Trace]
+      summary: Trace revenue mesh and route royalties
+      description: |
+        Parses the skill call stack, builds the full dependency tree (Layer 1),
+        applies perpetual on-chain royalties (Layer 2) and contribution weights (Layer 3),
+        optionally routes x402 USDC payments, and records to the economy graph (Layer 4).
+      operationId: postTrace
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TraceRequest'
+            examples:
+              dryRun:
+                summary: Dry-run demo (no wallet required)
+                value:
+                  rootSkillId: pharos-yield-pilot
+                  amountUsdc: "0.10"
+                  callStack:
+                    version: "1"
+                    frames:
+                      - skillId: pharos-yield-pilot
+                        depth: 0
+                        contributionWeight: 10000
+                      - skillId: pharos-realfi-security-scout
+                        depth: 1
+                        parentSkillId: pharos-yield-pilot
+                        contributionWeight: 7500
+                  dryRun: true
+      responses:
+        '200':
+          description: Trace report with royalty breakdown and provenance proof
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TraceResponse'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Trace failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /register:
+    post:
+      tags: [Register]
+      summary: Register skill with contribution weights
+      description: |
+        Registers a skill on Pharos mainnet (or local DEMO_REGISTRY cache when
+        FABRIC_REGISTRY_ADDRESS is unset). Declares contribution weight and perpetual royalty bps.
+      operationId: postRegister
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              skillId: my-analytics-skill
+              contributionWeight: 8000
+              dependencies:
+                - pharos-yield-pilot
+              royaltyBps: 500
+      responses:
+        '200':
+          description: Registration result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Registration failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /graph:
+    get:
+      tags: [Graph]
+      summary: Public Skill Economy Graph
+      description: |
+        Returns foundational skills, top earners, value flow, and recent events.
+        Layer 4 — real-time economy visibility.
+      operationId: getGraph
+      parameters:
+        - name: top
+          in: query
+          description: Number of top entries per category
+          schema:
+            type: integer
+            default: 10
+            minimum: 1
+            maximum: 100
+        - name: sinceHours
+          in: query
+          description: Filter events to the last N hours
+          schema:
+            type: number
+            minimum: 0
+      responses:
+        '200':
+          description: Economy graph snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GraphResponse'
+
+  /verify-payment:
+    post:
+      tags: [Verify]
+      summary: Verify payment provenance proof
+      operationId: postVerifyPayment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VerifyPaymentRequest'
+      responses:
+        '200':
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerifyPaymentResponse'
+        '400':
+          description: Missing proofId or txHash
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  schemas:
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [ok, degraded]
+        skill:
+          type: string
+        version:
+          type: string
+        chainId:
+          type: integer
+          example: 1672
+        chain:
+          type: string
+        rpc:
+          type: string
+        blockNumber:
+          type: integer
+          nullable: true
+        rpcOk:
+          type: boolean
+        rpcError:
+          type: string
+          nullable: true
+        registryDeployed:
+          type: boolean
+        registryAddress:
+          type: string
+          nullable: true
+        dryRun:
+          type: boolean
+        demoRegistry:
+          type: boolean
+        timestamp:
+          type: string
+          format: date-time
+
+    CallStackFrame:
+      type: object
+      required: [skillId]
+      properties:
+        skillId:
+          type: string
+          example: pharos-yield-pilot
+        creator:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        contributionWeight:
+          type: integer
+          minimum: 1
+          maximum: 10000
+        depth:
+          type: integer
+          minimum: 0
+        parentSkillId:
+          type: string
+        signature:
+          type: string
+
+    CallStack:
+      type: object
+      properties:
+        version:
+          type: string
+          default: "1"
+        invocationId:
+          type: string
+        timestamp:
+          type: integer
+        frames:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallStackFrame'
+
+    TraceRequest:
+      type: object
+      required: [rootSkillId, amountUsdc]
+      properties:
+        rootSkillId:
+          type: string
+          description: Root skill being invoked
+          example: pharos-yield-pilot
+        amountUsdc:
+          type: string
+          description: Total USDC payment amount (decimal string)
+          example: "0.10"
+        callStack:
+          $ref: '#/components/schemas/CallStack'
+        header:
+          type: string
+          description: Base64-encoded X-Pharos-Call-Stack header (alternative to callStack)
+        payer:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        dryRun:
+          type: boolean
+          default: true
+          description: Simulate without sending on-chain payments
+        signProof:
+          type: boolean
+          default: false
+        requireFrameSignatures:
+          type: boolean
+          default: false
+          description: Reject traces whose call-stack frames are missing invalid creator signatures.
+
+    RoyaltyEntry:
+      type: object
+      properties:
+        skillId:
+          type: string
+        creator:
+          type: string
+        depth:
+          type: integer
+        contributionWeight:
+          type: integer
+        royaltyBps:
+          type: integer
+        depthWeight:
+          type: number
+        normalizedShareBps:
+          type: integer
+        amountUsdc:
+          type: string
+        amountAtomic:
+          type: string
+        perpetualRoyaltyBps:
+          type: integer
+
+    TraceResponse:
+      type: object
+      properties:
+        schemaVersion:
+          type: string
+        skill:
+          type: string
+        chainId:
+          type: integer
+        invocationId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        rootSkillId:
+          type: string
+        callStack:
+          type: array
+          items:
+            $ref: '#/components/schemas/CallStackFrame'
+        callStackVerification:
+          type: object
+          properties:
+            required:
+              type: boolean
+            valid:
+              type: boolean
+            frameCount:
+              type: integer
+            signedFrames:
+              type: integer
+            validFrames:
+              type: integer
+            invalidFrames:
+              type: integer
+            issues:
+              type: array
+              items:
+                type: string
+        dependencyTree:
+          type: object
+        royaltyBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoyaltyEntry'
+        totalPaid:
+          type: object
+          properties:
+            usdc:
+              type: string
+            atomic:
+              type: string
+        payer:
+          type: string
+        payments:
+          type: array
+          items:
+            type: object
+        paymentSettlement:
+          type: object
+          properties:
+            mode:
+              type: string
+              example: dry-run-x402-exact
+            x402Strict:
+              type: boolean
+            facilitatorConfigured:
+              type: boolean
+            totalPaidAtomic:
+              type: string
+        provenanceProof:
+          type: object
+          properties:
+            proofId:
+              type: string
+            merkleRoot:
+              type: string
+            chainId:
+              type: integer
+            invocationId:
+              type: string
+            recordTxHash:
+              type: string
+              nullable: true
+        onChainProofRecord:
+          type: object
+          nullable: true
+        proofRecordError:
+          type: string
+          nullable: true
+        graphSnapshot:
+          type: object
+        layers:
+          type: object
+        dryRun:
+          type: boolean
+
+    RegisterRequest:
+      type: object
+      required: [skillId, contributionWeight]
+      properties:
+        skillId:
+          type: string
+          example: my-analytics-skill
+        contributionWeight:
+          type: integer
+          minimum: 1
+          maximum: 10000
+          description: Creator contribution weight in basis points
+        dependencies:
+          type: array
+          items:
+            type: string
+          example: [pharos-yield-pilot]
+        royaltyBps:
+          type: integer
+          minimum: 0
+          maximum: 2000
+          default: 500
+        creator:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+
+    RegisterResponse:
+      type: object
+      properties:
+        skillId:
+          type: string
+        creator:
+          type: string
+        contributionWeight:
+          type: integer
+        royaltyBps:
+          type: integer
+        dependencies:
+          type: array
+          items:
+            type: string
+        mode:
+          type: string
+          enum: [on-chain, cache-only]
+        txHash:
+          type: string
+          nullable: true
+        blockNumber:
+          type: integer
+          nullable: true
+        explorerUrl:
+          type: string
+          nullable: true
+        message:
+          type: string
+
+    GraphResponse:
+      type: object
+      properties:
+        schemaVersion:
+          type: string
+        skill:
+          type: string
+        layer:
+          type: integer
+          example: 4
+        description:
+          type: string
+        totalInvocations:
+          type: integer
+        totalEvents:
+          type: integer
+        totalVolumeUsdc:
+          type: string
+        totalVolumeAtomic:
+          type: string
+        totalGrossVolumeUsdc:
+          type: string
+        totalSettledVolumeUsdc:
+          type: string
+        totalCreatorEarningsUsdc:
+          type: string
+        settledPaymentCount:
+          type: integer
+        foundationalSkills:
+          type: array
+          items:
+            type: object
+            properties:
+              skillId:
+                type: string
+              dependencyReferences:
+                type: integer
+              totalVolumeUsdc:
+                type: string
+              invocations:
+                type: integer
+        topEarners:
+          type: array
+          items:
+            type: object
+            properties:
+              creator:
+                type: string
+              totalEarnedUsdc:
+                type: string
+              totalEarnedAtomic:
+                type: string
+        valueFlow:
+          type: array
+          items:
+            type: object
+            properties:
+              from:
+                type: string
+              to:
+                type: string
+              flowCount:
+                type: integer
+        generatedAt:
+          type: string
+          format: date-time
+
+    VerifyPaymentRequest:
+      type: object
+      properties:
+        proofId:
+          type: string
+        txHash:
+          type: string
+        royaltyBreakdown:
+          type: array
+          items:
+            $ref: '#/components/schemas/RoyaltyEntry'
+        proof:
+          type: object
+          description: Full provenance proof object returned by /trace.
+
+    VerifyPaymentResponse:
+      type: object
+      properties:
+        valid:
+          type: boolean
+        proofId:
+          type: string
+        merkleRoot:
+          type: string
+        recomputedMerkleRoot:
+          type: string
+        issues:
+          type: array
+          items:
+            type: string
+        onChain:
+          type: object
+          properties:
+            checked:
+              type: boolean
+            valid:
+              type: boolean
+              nullable: true
+            mode:
+              type: string
+        verifiedAt:
+          type: string
+          format: date-time
