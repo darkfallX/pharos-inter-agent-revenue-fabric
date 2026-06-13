@@ -1,0 +1,17 @@
+[profile.default]
+src = "contracts"
+out = "out"
+libs = ["lib"]
+script = "script"
+remappings = ["forge-std/=lib/forge-std/src/"]
+solc = "0.8.24"
+optimizer = true
+optimizer_runs = 200
+evm_version = "paris"
+
+[rpc_endpoints]
+pharos-mainnet = "https://rpc.pharos.xyz"
+pharos-atlantic = "https://atlantic.dplabs-internal.com"
+
+[etherscan]
+pharos-mainnet = { key = "${PHAROS_ETHERSCAN_KEY}", url = "https://pharosscan.xyz/api" }
