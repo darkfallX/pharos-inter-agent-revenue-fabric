@@ -1,0 +1,59 @@
+{
+  "name": "pharos-inter-agent-revenue-fabric",
+  "version": "1.1.0",
+  "description": "Inter-agent revenue mesh for Pharos: signed dependency tracking, perpetual royalties, contribution-weighted x402 USDC splits, Merkle proof verification, and public Skill Economy Graph.",
+  "main": "src/server/api.js",
+  "type": "module",
+  "bin": {
+    "pharos-revenue-fabric": "scripts/trace-fabric.js"
+  },
+  "scripts": {
+    "start": "node src/server/api.js",
+    "forge:deploy": "forge script script/Deploy.s.sol:DeploySkillRevenueFabric --rpc-url pharos-mainnet --broadcast",
+    "forge:build": "forge build",
+    "trace": "node scripts/trace-fabric.js trace",
+    "register": "node scripts/trace-fabric.js register",
+    "graph": "node scripts/trace-fabric.js graph",
+    "verify": "node scripts/trace-fabric.js verify",
+    "test": "node test/fabric.test.js",
+    "demo": "node scripts/trace-fabric.js trace --root-skill pharos-yield-pilot --amount 0.10 --call-stack ./examples/call-stack.json --dry-run",
+    "proof-demo": "node scripts/trace-fabric.js trace --root-skill pharos-yield-pilot --amount 0.10 --call-stack ./examples/call-stack.json --dry-run --proof-file ./report.proof.json",
+    "deploy": "node deploy/deploy.js"
+  },
+  "devDependencies": {
+    "solc": "^0.8.24"
+  },
+  "keywords": [
+    "pharos",
+    "x402",
+    "usdc",
+    "royalties",
+    "inter-agent",
+    "micropayments",
+    "skill-economy",
+    "agent-center",
+    "provenance",
+    "composability"
+  ],
+  "author": "Praise Ezekwe (darkfallX)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/darkfallX/pharos-inter-agent-revenue-fabric.git"
+  },
+  "homepage": "https://github.com/darkfallX/pharos-inter-agent-revenue-fabric#readme",
+  "license": "MIT-0",
+  "dependencies": {
+    "@x402/core": "^2.14.0",
+    "@x402/evm": "^2.14.0",
+    "@x402/fetch": "^2.14.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "viem": "^2.21.0"
+  },
+  "overrides": {
+    "tmp": "^0.2.7"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
