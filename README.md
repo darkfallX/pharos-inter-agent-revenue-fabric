@@ -14,7 +14,7 @@
 
 ## Demo Video
 
-[Watch Demo on YouTube](YOUR_LINK_HERE)
+[Watch Demo on YouTube](https://youtu.be/RgIqCiZqIi4?si=F0Tr5psTEmwDZE35)
 
 ## Live Onchain Proof (Pharos Atlantic Testnet)
 
