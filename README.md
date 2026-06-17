@@ -32,7 +32,7 @@ The recorded proof reads back `verifyPaymentProof() == true` from the contract. 
 
 Most Pharos skills charge end-users through x402. This skill makes **agents pay each other** by tracing recursive skill composability, splitting USDC royalties by contribution weight, generating Merkle provenance proofs, and exposing a public Skill Economy Graph.
 
-## Why This Wins
+## The Solution
 
 When a song plays on Spotify, five parties get paid simultaneously: the artist, the songwriter, the producer, the label, and the publisher. Right now in the agent economy, when ten skills collaborate to answer one request, only the top-level caller gets paid. Every upstream skill that did real work earns nothing.
 
