@@ -1753,18 +1753,45 @@
   function claimMessage(skillId, wallet) {
     return 'Pharos Revenue Fabric\nClaim skill: ' + skillId + '\nWallet: ' + wallet + '\nChain: 1672';
   }
+  // Resolve an injected EVM provider, handling multiple wallets and EIP-6963.
+  let eip6963Provider = null;
+  window.addEventListener('eip6963:announceProvider', (e) => {
+    if (e?.detail?.provider && !eip6963Provider) eip6963Provider = e.detail.provider;
+  });
+  try { window.dispatchEvent(new Event('eip6963:requestProvider')); } catch (e) {}
+
+  function getEthProvider() {
+    if (window.ethereum) {
+      if (Array.isArray(window.ethereum.providers) && window.ethereum.providers.length) {
+        return window.ethereum.providers.find((p) => p.isMetaMask) || window.ethereum.providers[0];
+      }
+      return window.ethereum;
+    }
+    return eip6963Provider;
+  }
+
   const claimSignBtn = document.getElementById('claim-sign');
   claimSignBtn.addEventListener('click', async () => {
     const skillId = document.getElementById('claim-skill').value.trim();
     if (!skillId) return showClaim('err', 'Enter a skill ID.');
-    if (!window.ethereum) return showClaim('err', 'No EVM wallet detected. Install MetaMask to claim, or POST /claim with a signed message.');
+
+    // Browser wallets never inject into file:// pages — must be served over http(s).
+    if (location.protocol === 'file:') {
+      return showClaim('err', 'Open the dashboard at http://localhost:4020/dashboard (run npm start) or the live URL. Wallets like MetaMask cannot connect to a file:// page.');
+    }
+
+    const provider = getEthProvider();
+    if (!provider) {
+      return showClaim('err', 'No EVM wallet detected. Make sure MetaMask is enabled for this page, then reload.');
+    }
+
     claimSignBtn.classList.add('busy');
     try {
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const wallet = accounts[0];
+      const accounts = await provider.request({ method: 'eth_requestAccounts' });
+      const wallet = accounts && accounts[0];
+      if (!wallet) throw new Error('wallet returned no account');
       const message = claimMessage(skillId, wallet);
-      const signature = await window.ethereum.request({ method: 'personal_sign', params: [message, wallet] });
-      if (location.protocol === 'file:') throw new Error('standalone, run `npm start` to bind via the API');
+      const signature = await provider.request({ method: 'personal_sign', params: [message, wallet] });
       const res = await fetch('/claim', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ skillId, wallet, signature, message }),
@@ -1776,7 +1803,8 @@
       toast('Skill claimed', skillId + ' → ' + short);
       refresh();
     } catch (e) {
-      showClaim('err', 'Claim failed: ' + (e.message || String(e)));
+      const msg = e && e.code === 4001 ? 'Request rejected in your wallet.' : (e.message || String(e));
+      showClaim('err', 'Claim failed: ' + msg);
     } finally {
       claimSignBtn.classList.remove('busy');
     }
