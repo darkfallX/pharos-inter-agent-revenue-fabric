@@ -1,6 +1,6 @@
 /**
  * Network configuration loader.
- * Reads networks.json — the single source of truth for Pharos chain definitions.
+ * Reads networks.json, the single source of truth for Pharos chain definitions.
  */
 
 import fs from 'fs';

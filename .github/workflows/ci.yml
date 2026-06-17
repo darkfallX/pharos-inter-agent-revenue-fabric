@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Unit tests
+        run: npm test
+      - name: Dry-run trace (smoke test)
+        run: npm run demo
+      - name: Verify proof bundle round-trip
+        run: |
+          node scripts/trace-fabric.js trace \
+            --root-skill pharos-yield-pilot --amount 0.10 \
+            --call-stack ./examples/call-stack.json --dry-run \
+            --proof-file ./report.proof.json
+          node scripts/trace-fabric.js verify --proof-file ./report.proof.json

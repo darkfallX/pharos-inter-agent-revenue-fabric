@@ -137,13 +137,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /claim:
+    post:
+      tags: [Register]
+      summary: Claim a skill and bind a payout wallet
+      description: |
+        Binds a wallet as a skill's creator by verifying a signed claim message
+        (`buildClaimMessage(skillId, wallet, chainId)`). Unclaimed skills can be
+        claimed first; an already-claimed skill can only be re-bound by its own wallet.
+      operationId: postClaim
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ClaimRequest'
+      responses:
+        '200':
+          description: Claim result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimResponse'
+        '400':
+          description: Missing fields or invalid signature
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /graph:
     get:
       tags: [Graph]
       summary: Public Skill Economy Graph
       description: |
         Returns foundational skills, top earners, value flow, and recent events.
-        Layer 4 — real-time economy visibility.
+        Layer 4, real-time economy visibility.
       operationId: getGraph
       parameters:
         - name: top
@@ -484,6 +513,40 @@ components:
           type: string
           nullable: true
         message:
+          type: string
+
+    ClaimRequest:
+      type: object
+      required: [skillId, wallet, signature]
+      properties:
+        skillId:
+          type: string
+          example: pharos-inter-agent-revenue-fabric
+        wallet:
+          type: string
+          pattern: '^0x[a-fA-F0-9]{40}$'
+        signature:
+          type: string
+          description: EIP-191 signature over the claim message.
+        message:
+          type: string
+          description: The exact claim message that was signed (optional; validated if present).
+
+    ClaimResponse:
+      type: object
+      properties:
+        skillId:
+          type: string
+        wallet:
+          type: string
+        claimed:
+          type: boolean
+        signer:
+          type: string
+        mode:
+          type: string
+          enum: [cache-only, cache-bound]
+        onChain:
           type: string
 
     GraphResponse:

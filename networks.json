@@ -17,13 +17,13 @@
       "name": "Pharos Atlantic Testnet",
       "chainId": 688689,
       "rpcUrl": "https://atlantic.dplabs-internal.com",
-      "explorer": "",
+      "explorer": "https://pharos-testnet.socialscan.io",
       "nativeCurrency": {
         "name": "GAS",
         "symbol": "GAS",
         "decimals": 18
       },
-      "usdc": ""
+      "usdc": "0xcfc8330f4bcab529c625d12781b1c19466a9fc8b"
     }
   }
 }

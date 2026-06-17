@@ -1,8 +1,3 @@
-/**
- * Verifiable payment provenance proofs.
- * Merkle-root attestations over royalty breakdowns for trustless verification.
- */
-
 import {
   keccak256,
   encodeAbiParameters,
@@ -10,47 +5,68 @@ import {
   toHex,
   hashMessage,
   recoverMessageAddress,
+  recoverTypedDataAddress,
   isAddress,
   zeroAddress,
 } from 'viem';
 import crypto from 'crypto';
+import { PHAROS_CHAIN_ID } from '../chain/chains.js';
 
-/** Generate a unique proof ID. */
+// EIP-712 typed data binds a frame signature to the chainId, so a frame signed
+// for Pharos can't be replayed elsewhere. Opt in per frame with sigType:'eip712'.
+const FRAME_712_TYPES = {
+  CallStackFrame: [
+    { name: 'invocationId', type: 'string' },
+    { name: 'skillId', type: 'string' },
+    { name: 'creator', type: 'address' },
+    { name: 'contributionWeight', type: 'uint256' },
+    { name: 'depth', type: 'uint256' },
+    { name: 'parentSkillId', type: 'string' },
+  ],
+};
+
+export function buildFrameTypedData(frame, invocationId, chainId = PHAROS_CHAIN_ID) {
+  return {
+    domain: { name: 'PharosRevenueFabric', version: '1', chainId: Number(chainId) },
+    types: FRAME_712_TYPES,
+    primaryType: 'CallStackFrame',
+    message: {
+      invocationId: invocationId || '',
+      skillId: frame.skillId || '',
+      creator: frame.creator && isAddress(frame.creator) ? frame.creator : zeroAddress,
+      contributionWeight: BigInt(frame.contributionWeight ?? 0),
+      depth: BigInt(frame.depth ?? 0),
+      parentSkillId: frame.parentSkillId || '',
+    },
+  };
+}
+
+export async function signCallStackFrameTyped(walletClient, frame, invocationId, chainId = PHAROS_CHAIN_ID) {
+  return walletClient.signTypedData(buildFrameTypedData(frame, invocationId, chainId));
+}
+
 export function generateProofId() {
   return `proof_${crypto.randomBytes(12).toString('hex')}`;
 }
 
-/** Generate a unique invocation ID. */
 export function generateInvocationId() {
   return `inv_${crypto.randomBytes(12).toString('hex')}`;
 }
 
-/**
- * Build a Merkle tree leaf from a royalty entry.
- */
 function leafHash(entry) {
   const creator = isAddress(entry.creator) ? entry.creator : zeroAddress;
-
   return keccak256(
-    encodeAbiParameters(
-      parseAbiParameters('string, address, uint256, uint256'),
-      [
-        entry.skillId,
-        creator,
-        BigInt(entry.amountAtomic || '0'),
-        BigInt(entry.normalizedShareBps || 0),
-      ]
-    )
+    encodeAbiParameters(parseAbiParameters('string, address, uint256, uint256'), [
+      entry.skillId,
+      creator,
+      BigInt(entry.amountAtomic || '0'),
+      BigInt(entry.normalizedShareBps || 0),
+    ])
   );
 }
 
-/**
- * Deterministic message for a single skill invocation frame.
- * Creators sign this message to attest that their skill participated in the
- * invocation graph and declared the contribution metadata carried downstream.
- */
 export function buildCallStackFrameMessage(frame, invocationId) {
-  const payload = {
+  return JSON.stringify({
     domain: 'pharos-inter-agent-revenue-fabric',
     version: '1',
     invocationId,
@@ -59,37 +75,40 @@ export function buildCallStackFrameMessage(frame, invocationId) {
     contributionWeight: frame.contributionWeight ?? null,
     depth: frame.depth ?? 0,
     parentSkillId: frame.parentSkillId || null,
-  };
-
-  return JSON.stringify(payload);
-}
-
-/** Sign one call-stack frame with a viem wallet client. */
-export async function signCallStackFrame(walletClient, frame, invocationId) {
-  return walletClient.signMessage({
-    message: buildCallStackFrameMessage(frame, invocationId),
   });
 }
 
-/** Verify a single call-stack frame signature against its declared creator. */
+// Must match the string the dashboard / CLI builds for a claim signature.
+export function buildClaimMessage(skillId, wallet, chainId) {
+  return ['Pharos Revenue Fabric', 'Claim skill: ' + skillId, 'Wallet: ' + wallet, 'Chain: ' + chainId].join('\n');
+}
+
+export async function signCallStackFrame(walletClient, frame, invocationId) {
+  return walletClient.signMessage({ message: buildCallStackFrameMessage(frame, invocationId) });
+}
+
 export async function verifyCallStackFrame(frame, invocationId) {
   const issues = [];
 
   if (!frame?.skillId) issues.push('missing skillId');
   if (!frame?.creator || !isAddress(frame.creator)) issues.push('missing or invalid creator');
   if (!frame?.signature) issues.push('missing signature');
-  if (frame?.signature && /^0x0+$/i.test(frame.signature)) {
-    issues.push('placeholder signature');
-  }
+  if (frame?.signature && /^0x0+$/i.test(frame.signature)) issues.push('placeholder signature');
 
   let recovered = null;
   if (!issues.length) {
     try {
-      recovered = await recoverMessageAddress({
-        message: buildCallStackFrameMessage(frame, invocationId),
-        signature: frame.signature,
-      });
-
+      if (frame.sigType === 'eip712') {
+        recovered = await recoverTypedDataAddress({
+          ...buildFrameTypedData(frame, invocationId, frame.chainId || PHAROS_CHAIN_ID),
+          signature: frame.signature,
+        });
+      } else {
+        recovered = await recoverMessageAddress({
+          message: buildCallStackFrameMessage(frame, invocationId),
+          signature: frame.signature,
+        });
+      }
       if (recovered.toLowerCase() !== frame.creator.toLowerCase()) {
         issues.push('signature does not match creator');
       }
@@ -102,20 +121,18 @@ export async function verifyCallStackFrame(frame, invocationId) {
     skillId: frame?.skillId,
     creator: frame?.creator || null,
     recovered,
+    sigType: frame?.sigType === 'eip712' ? 'eip712' : 'personal_sign',
     valid: issues.length === 0,
     issues,
   };
 }
 
-/** Verify every frame in a call stack and return judge-friendly diagnostics. */
 export async function verifyCallStackFrames(frames, invocationId) {
   const frameResults = await Promise.all(
     (frames || []).map((frame) => verifyCallStackFrame(frame, invocationId))
   );
   const validFrames = frameResults.filter((frame) => frame.valid).length;
-  const signedFrames = frameResults.filter(
-    (frame) => !frame.issues.includes('missing signature')
-  ).length;
+  const signedFrames = frameResults.filter((frame) => !frame.issues.includes('missing signature')).length;
   const issues = frameResults.flatMap((frame) =>
     frame.issues.map((issue) => `${frame.skillId || 'unknown'}: ${issue}`)
   );
@@ -132,13 +149,8 @@ export async function verifyCallStackFrames(frames, invocationId) {
   };
 }
 
-/**
- * Compute Merkle root from royalty breakdown entries.
- */
 export function computeMerkleRoot(royaltyBreakdown) {
-  if (!royaltyBreakdown.length) {
-    return `0x${'0'.repeat(64)}`;
-  }
+  if (!royaltyBreakdown.length) return `0x${'0'.repeat(64)}`;
 
   let layer = royaltyBreakdown.map(leafHash);
 
@@ -146,17 +158,9 @@ export function computeMerkleRoot(royaltyBreakdown) {
     const next = [];
     for (let i = 0; i < layer.length; i += 2) {
       if (i + 1 < layer.length) {
-        const pair = layer[i] < layer[i + 1]
-          ? [layer[i], layer[i + 1]]
-          : [layer[i + 1], layer[i]];
-        next.push(
-          keccak256(
-            encodeAbiParameters(
-              parseAbiParameters('bytes32, bytes32'),
-              pair
-            )
-          )
-        );
+        // sort the pair so the root is independent of leaf order
+        const pair = layer[i] < layer[i + 1] ? [layer[i], layer[i + 1]] : [layer[i + 1], layer[i]];
+        next.push(keccak256(encodeAbiParameters(parseAbiParameters('bytes32, bytes32'), pair)));
       } else {
         next.push(layer[i]);
       }
@@ -167,9 +171,6 @@ export function computeMerkleRoot(royaltyBreakdown) {
   return layer[0];
 }
 
-/**
- * Build a full provenance proof object from a trace report.
- */
 export function buildProvenanceProof({
   invocationId,
   rootSkillId,
@@ -194,15 +195,13 @@ export function buildProvenanceProof({
     createdAt: new Date().toISOString(),
   };
 
-  const payloadHash = keccak256(toHex(JSON.stringify(payload)));
-
   return {
     proofId,
     invocationId,
     rootSkillId,
     payer,
     merkleRoot,
-    payloadHash,
+    payloadHash: keccak256(toHex(JSON.stringify(payload))),
     totalAtomic: totalAtomic.toString(),
     chainId,
     blockNumber: null,
@@ -217,9 +216,6 @@ export function buildProvenanceProof({
   };
 }
 
-/**
- * Create an EIP-191 signature over the provenance payload.
- */
 export async function signProvenanceProof(walletClient, proof) {
   const message = JSON.stringify({
     proofId: proof.proofId,
@@ -230,20 +226,13 @@ export async function signProvenanceProof(walletClient, proof) {
       : '0',
   });
 
-  const signature = await walletClient.signMessage({
-    message,
-  });
-
   return {
     signer: walletClient.account.address,
-    signature,
+    signature: await walletClient.signMessage({ message }),
     message,
   };
 }
 
-/**
- * Verify a provenance proof locally (signature + merkle integrity).
- */
 export async function verifyProvenanceProof(proof, royaltyBreakdown) {
   const issues = [];
 
@@ -258,15 +247,8 @@ export async function verifyProvenanceProof(proof, royaltyBreakdown) {
   const sigResults = [];
   for (const sig of proof?.signatures || []) {
     try {
-      const recovered = await recoverMessageAddress({
-        message: sig.message,
-        signature: sig.signature,
-      });
-      sigResults.push({
-        signer: sig.signer,
-        recovered,
-        valid: recovered.toLowerCase() === sig.signer.toLowerCase(),
-      });
+      const recovered = await recoverMessageAddress({ message: sig.message, signature: sig.signature });
+      sigResults.push({ signer: sig.signer, recovered, valid: recovered.toLowerCase() === sig.signer.toLowerCase() });
       if (recovered.toLowerCase() !== sig.signer.toLowerCase()) {
         issues.push(`invalid signature from ${sig.signer}`);
       }
@@ -287,10 +269,6 @@ export async function verifyProvenanceProof(proof, royaltyBreakdown) {
   };
 }
 
-/**
- * Verify proof by ID against stored graph events.
- */
 export function findProofInGraph(proofId) {
-  // Imported dynamically to avoid circular deps at module level
   return { proofId, status: 'lookup-required' };
 }

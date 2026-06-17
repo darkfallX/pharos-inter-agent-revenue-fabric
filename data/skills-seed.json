@@ -1,0 +1,34 @@
+{
+  "version": "1",
+  "note": "Seeded from the official Pharos Agent Center preseason submission index, these are REAL community skills (real repos + builders), registered here as nodes in the Skill Economy Graph. All carry source:'carnival' and claimed:false with no wallet: royalties accrue against the skillId until the real builder binds a wallet via POST /claim. The dependency edges below are an illustrative composition (real cross-skill deps aren't declared on-chain yet) used to demo how value would flow; node identities and repos are real. 'self' = this skill. Import more with `npm run seed -- --github owner/repo`.",
+  "skills": [
+    { "skillId": "pharos-inter-agent-revenue-fabric", "builder": "Darkfall_x", "creator": null, "contributionWeight": 9000, "royaltyBps": 500, "dependencies": ["pharos-x402-skill"], "source": "self", "repo": "https://github.com/darkfallX/pharos-inter-agent-revenue-fabric", "claimed": false },
+
+    { "skillId": "pharos-realfi-security-scout", "builder": "Darkfall_x", "creator": null, "contributionWeight": 8500, "royaltyBps": 600, "dependencies": ["pharos-contract-auditor", "pharos-wallet-intel"], "source": "carnival", "repo": "https://github.com/darkfallX/Pharos-Realfi-Security-Scout", "claimed": false },
+
+    { "skillId": "pharos-x402-skill", "builder": "JusticeEssien", "creator": null, "contributionWeight": 10000, "royaltyBps": 500, "dependencies": [], "source": "carnival", "repo": "https://github.com/Essienjustice/pharos-x402-skill", "claimed": false },
+    { "skillId": "pharos-wallet-intel", "builder": "MulubrhanBts", "creator": null, "contributionWeight": 9500, "royaltyBps": 450, "dependencies": [], "source": "carnival", "repo": "https://github.com/Meloty13/pharos-wallet-intel", "claimed": false },
+    { "skillId": "pharos-contract-intelligence", "builder": "Jason", "creator": null, "contributionWeight": 9200, "royaltyBps": 450, "dependencies": [], "source": "carnival", "repo": "https://github.com/BisimJang/pharos-contract-intelligence", "claimed": false },
+    { "skillId": "pharos-token-analytics", "builder": "StanSteps", "creator": null, "contributionWeight": 8800, "royaltyBps": 400, "dependencies": [], "source": "carnival", "repo": "https://github.com/StanSteps/pharos-token-analytics", "claimed": false },
+    { "skillId": "pharos-tx-decoder", "builder": "Rasidat", "creator": null, "contributionWeight": 8600, "royaltyBps": 400, "dependencies": [], "source": "carnival", "repo": "https://github.com/Rasheedat22/pharos-tx-decoder", "claimed": false },
+    { "skillId": "onchain-activity-digest", "builder": "koldwalle", "creator": null, "contributionWeight": 8000, "royaltyBps": 350, "dependencies": [], "source": "carnival", "repo": "https://github.com/Yubbbyd/onchain-activity-digest", "claimed": false },
+
+    { "skillId": "pharos-contract-auditor", "builder": "Chibnuel", "creator": null, "contributionWeight": 8400, "royaltyBps": 550, "dependencies": ["pharos-contract-intelligence", "reepatts"], "source": "carnival", "repo": "https://github.com/Chibuzemy/pharos-contract-auditor", "claimed": false },
+    { "skillId": "pharos-aml-sentinel", "builder": "Jeunesse", "creator": null, "contributionWeight": 8200, "royaltyBps": 500, "dependencies": [], "source": "carnival", "repo": "https://github.com/jeunesse-btq/pharos-aml-sentinel", "claimed": false },
+    { "skillId": "wallet-risk-intelligence", "builder": "Krane", "creator": null, "contributionWeight": 8000, "royaltyBps": 500, "dependencies": ["pharos-wallet-intel"], "source": "carnival", "repo": "https://github.com/wkuye/Wallet-Risk-Intelligence-Skill", "claimed": false },
+    { "skillId": "pharos-agent-transaction-firewall", "builder": "Meursault", "creator": null, "contributionWeight": 7800, "royaltyBps": 500, "dependencies": ["wallet-risk-intelligence", "pharos-approval-auditor"], "source": "carnival", "repo": "https://github.com/Meursault44/pharos-agent-transaction-firewall", "claimed": false },
+    { "skillId": "reepatts", "builder": "Azeez", "creator": null, "contributionWeight": 7600, "royaltyBps": 450, "dependencies": [], "source": "carnival", "repo": "https://github.com/pazzy422/reepatts", "claimed": false },
+    { "skillId": "eip712-domain-auditor", "builder": "Tunde", "creator": null, "contributionWeight": 7400, "royaltyBps": 450, "dependencies": [], "source": "carnival", "repo": "https://github.com/Tunde0058/EIP-712DSA", "claimed": false },
+    { "skillId": "pharos-approval-auditor", "builder": "Lukman", "creator": null, "contributionWeight": 7200, "royaltyBps": 400, "dependencies": [], "source": "carnival", "repo": "https://github.com/Hardey222/pharos-approval-auditor", "claimed": false },
+
+    { "skillId": "pharospay", "builder": "VT", "creator": null, "contributionWeight": 7000, "royaltyBps": 400, "dependencies": ["pharos-x402-skill", "pharos-aml-sentinel"], "source": "carnival", "repo": "https://github.com/Vt01nft/pharospay-skill", "claimed": false },
+    { "skillId": "splitra", "builder": "kane", "creator": null, "contributionWeight": 6800, "royaltyBps": 400, "dependencies": ["pharos-x402-skill"], "source": "carnival", "repo": "https://github.com/comzzy-comzzy/splitra", "claimed": false },
+
+    { "skillId": "pharos-rwa-engine", "builder": "Jason", "creator": null, "contributionWeight": 7500, "royaltyBps": 500, "dependencies": ["pharos-contract-intelligence"], "source": "carnival", "repo": "https://github.com/BisimJang/pharos-rwa-engine", "claimed": false },
+    { "skillId": "pharos-rwa-yield-router", "builder": "Jennycruzy", "creator": null, "contributionWeight": 6600, "royaltyBps": 450, "dependencies": ["pharos-rwa-engine", "pharos-realfi-security-scout"], "source": "carnival", "repo": "https://github.com/Jennycruzy/pharos-rwa-yield-router", "claimed": false },
+    { "skillId": "pharos-dex-swap", "builder": "vibur.kr", "creator": null, "contributionWeight": 7000, "royaltyBps": 400, "dependencies": ["pharos-tx-decoder"], "source": "carnival", "repo": "https://github.com/vibur-kr/pharos-dex-swap-skill", "claimed": false },
+
+    { "skillId": "pharos-strategy-composer", "builder": "wakanda", "creator": null, "contributionWeight": 6200, "royaltyBps": 350, "dependencies": ["pharos-token-analytics", "pharos-realfi-security-scout", "pharos-dex-swap"], "source": "carnival", "repo": "https://github.com/wakanda-soul/pharos-strategy-composer", "claimed": false },
+    { "skillId": "pharos-autonomous-execution-engine", "builder": "Mira", "creator": null, "contributionWeight": 6000, "royaltyBps": 350, "dependencies": ["pharos-strategy-composer", "pharos-agent-transaction-firewall", "pharos-x402-skill"], "source": "carnival", "repo": "https://github.com/MicheleGiane9/pharos-autonomous-execution-engine", "claimed": false }
+  ]
+}

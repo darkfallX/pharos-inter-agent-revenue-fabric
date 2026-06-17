@@ -1,5 +1,5 @@
 /**
- * Pharos Inter-Agent Revenue Fabric — unit tests
+ * Pharos Inter-Agent Revenue Fabric, unit tests
  */
 
 import assert from 'assert';
@@ -13,19 +13,29 @@ import {
   computeMerkleRoot,
   buildProvenanceProof,
   signCallStackFrame,
+  signCallStackFrameTyped,
   verifyCallStackFrames,
   verifyProvenanceProof,
 } from '../src/provenance.js';
 import { getGraphSnapshot, recordEvent, loadEvents } from '../src/graph.js';
 import { skillIdToBytes32 } from '../src/registry.js';
+import { claimSkill } from '../src/fabric.js';
+import { buildClaimMessage } from '../src/provenance.js';
+import { PHAROS_CHAIN_ID } from '../src/chains.js';
 import { toAtomicUsdc } from '../src/x402.js';
+import { fabric } from '../src/integration/fabric-client.js';
+import { callTool, TOOLS } from '../mcp/server.js';
+import { parseSkillManifest } from '../scripts/seed-registry.js';
 import { privateKeyToAccount } from 'viem/accounts';
 
 process.env.GRAPH_DATA_PATH = './data/test-graph.jsonl';
-try {
-  await import('node:fs').then((fs) => fs.unlinkSync(process.env.GRAPH_DATA_PATH));
-} catch {
-  /* no prior test graph */
+process.env.REGISTRY_CACHE_PATH = './data/test-registry-cache.json';
+for (const p of [process.env.GRAPH_DATA_PATH, process.env.REGISTRY_CACHE_PATH]) {
+  try {
+    await import('node:fs').then((fs) => fs.unlinkSync(p));
+  } catch {
+    /* no prior test artifact */
+  }
 }
 
 let passed = 0;
@@ -53,7 +63,7 @@ async function testAsync(name, fn) {
   }
 }
 
-console.log('\nPharos Inter-Agent Revenue Fabric — Tests\n');
+console.log('\nPharos Inter-Agent Revenue Fabric, Tests\n');
 
 // Layer 1: Call stack parsing
 test('parseCallStack handles JSON object', () => {
@@ -148,6 +158,27 @@ await testAsync('call-stack frame signatures verify', async () => {
   assert.strictEqual(result.validFrames, 1);
 });
 
+await testAsync('EIP-712 typed call-stack frame signatures verify', async () => {
+  const account = privateKeyToAccount(
+    '0x59c6995e998f97a5a0044966f094538854a96d1b2c6f9d6f675b40d8f171650b'
+  );
+  const invocationId = 'inv_eip712_test';
+  const frame = {
+    skillId: 'typed-demo-skill',
+    creator: account.address,
+    contributionWeight: 9000,
+    depth: 0,
+    parentSkillId: null,
+    sigType: 'eip712',
+  };
+  frame.signature = await signCallStackFrameTyped(account, frame, invocationId);
+
+  const result = await verifyCallStackFrames([frame], invocationId);
+  assert.strictEqual(result.valid, true);
+  assert.strictEqual(result.validFrames, 1);
+  assert.strictEqual(result.frames[0].sigType, 'eip712');
+});
+
 await testAsync('trace can require signed call-stack frames', async () => {
   const account = privateKeyToAccount(
     '0x59c6995e998f97a5a0044966f094538854a96d1b2c6f9d6f675b40d8f171650b'
@@ -218,10 +249,76 @@ test('getGraphSnapshot returns valid structure', () => {
   assert.ok('valueFlow' in snap);
 });
 
+// Integration middleware (drop-in client)
+test('integration: appendFrame fills depth + parent', () => {
+  let s = { version: '1', frames: [] };
+  s = fabric.appendFrame(s, { skillId: 'a', creator: '0x1', contributionWeight: 10000 });
+  s = fabric.appendFrame(s, { skillId: 'b', creator: '0x2', contributionWeight: 7500 });
+  assert.strictEqual(s.frames.length, 2);
+  assert.strictEqual(s.frames[1].depth, 1);
+  assert.strictEqual(s.frames[1].parentSkillId, 'a');
+});
+
+test('integration: call stack header round-trips', () => {
+  const s = fabric.appendFrame({ version: '1', frames: [] }, { skillId: 'x', contributionWeight: 9000 });
+  const back = fabric.decodeCallStack(fabric.encodeCallStack(s));
+  assert.strictEqual(back.frames[0].skillId, 'x');
+});
+
+// Claim flow
+await testAsync('claim binds a wallet with a valid signature', async () => {
+  const account = privateKeyToAccount(
+    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+  );
+  const skillId = 'pharos-yield-pilot';
+  const message = buildClaimMessage(skillId, account.address, PHAROS_CHAIN_ID);
+  const signature = await account.signMessage({ message });
+  const result = await claimSkill({ skillId, wallet: account.address, signature });
+  assert.strictEqual(result.claimed, true);
+  assert.strictEqual(result.wallet.toLowerCase(), account.address.toLowerCase());
+});
+
+await testAsync('claim rejects a signature/wallet mismatch', async () => {
+  const account = privateKeyToAccount(
+    '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
+  );
+  const skillId = 'pharos-intent-yield-rebalancer';
+  const message = buildClaimMessage(skillId, account.address, PHAROS_CHAIN_ID);
+  const signature = await account.signMessage({ message });
+  await assert.rejects(
+    () => claimSkill({ skillId, wallet: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8', signature }),
+    /signature does not match/
+  );
+});
+
+// MCP server tool surface
+test('MCP exposes the expected tools', () => {
+  const names = TOOLS.map((t) => t.name);
+  assert.ok(names.includes('trace_revenue_mesh'));
+  assert.ok(names.includes('get_economy_graph'));
+  assert.ok(names.includes('claim_skill'));
+  assert.strictEqual(TOOLS.length, 6);
+});
+
+await testAsync('MCP callTool get_economy_graph returns a snapshot', async () => {
+  const snap = await callTool('get_economy_graph', { topN: 3 });
+  assert.ok('foundationalSkills' in snap);
+  assert.ok('totalInvocations' in snap);
+});
+
+// Seed importer manifest parser
+test('seed parseSkillManifest extracts name from frontmatter', () => {
+  const md = '---\nname: my-cool-skill\nversion: 1.0.0\n---\n\n# My Cool Skill\n';
+  assert.strictEqual(parseSkillManifest(md).name, 'my-cool-skill');
+  assert.strictEqual(parseSkillManifest('no frontmatter here'), null);
+});
+
 console.log(`\nResults: ${passed} passed, ${failed} failed\n`);
-try {
-  await import('node:fs').then((fs) => fs.unlinkSync(process.env.GRAPH_DATA_PATH));
-} catch {
-  /* ignore cleanup errors */
+for (const p of [process.env.GRAPH_DATA_PATH, process.env.REGISTRY_CACHE_PATH]) {
+  try {
+    await import('node:fs').then((fs) => fs.unlinkSync(p));
+  } catch {
+    /* ignore cleanup errors */
+  }
 }
 process.exit(failed > 0 ? 1 : 0);

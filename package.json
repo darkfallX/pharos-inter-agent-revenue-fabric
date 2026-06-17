@@ -4,18 +4,30 @@
   "description": "Inter-agent revenue mesh for Pharos: signed dependency tracking, perpetual royalties, contribution-weighted x402 USDC splits, Merkle proof verification, and public Skill Economy Graph.",
   "main": "src/server/api.js",
   "type": "module",
+  "exports": {
+    ".": "./src/server/api.js",
+    "./integration": "./src/integration/fabric-client.js",
+    "./mcp": "./mcp/server.js"
+  },
   "bin": {
-    "pharos-revenue-fabric": "scripts/trace-fabric.js"
+    "pharos-revenue-fabric": "scripts/trace-fabric.js",
+    "pharos-revenue-fabric-mcp": "mcp/server.js"
   },
   "scripts": {
     "start": "node src/server/api.js",
     "forge:deploy": "forge script script/Deploy.s.sol:DeploySkillRevenueFabric --rpc-url pharos-mainnet --broadcast",
+    "deploy:testnet": "forge script script/Deploy.s.sol:DeploySkillRevenueFabric --rpc-url pharos-atlantic --private-key $PRIVATE_KEY --broadcast",
+    "deploy:mainnet": "forge script script/Deploy.s.sol:DeploySkillRevenueFabric --rpc-url pharos-mainnet --private-key $PRIVATE_KEY --broadcast",
+    "mcp": "node mcp/server.js",
     "forge:build": "forge build",
+    "ask": "node scripts/trace-fabric.js ask",
     "trace": "node scripts/trace-fabric.js trace",
     "register": "node scripts/trace-fabric.js register",
     "graph": "node scripts/trace-fabric.js graph",
     "verify": "node scripts/trace-fabric.js verify",
     "test": "node test/fabric.test.js",
+    "seed": "node scripts/seed-registry.js",
+    "settle:demo": "node scripts/settle-demo.js",
     "demo": "node scripts/trace-fabric.js trace --root-skill pharos-yield-pilot --amount 0.10 --call-stack ./examples/call-stack.json --dry-run",
     "proof-demo": "node scripts/trace-fabric.js trace --root-skill pharos-yield-pilot --amount 0.10 --call-stack ./examples/call-stack.json --dry-run --proof-file ./report.proof.json",
     "deploy": "node deploy/deploy.js"

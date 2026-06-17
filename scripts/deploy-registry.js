@@ -1,7 +1,4 @@
 #!/usr/bin/env node
-/**
- * @deprecated Use `npm run deploy` instead.
- * Forwards to deploy/deploy.js
- */
+// Deprecated, forwards to deploy/deploy.js (use `npm run deploy`).
 console.log('Redirecting to npm run deploy...\n');
 await import('../deploy/deploy.js');

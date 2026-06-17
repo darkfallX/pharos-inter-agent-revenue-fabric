@@ -1,8 +1,3 @@
-/**
- * Public Skill Economy Graph (Layer 4).
- * Append-only event store with real-time aggregation queries.
- */
-
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
@@ -16,28 +11,21 @@ function graphPath() {
 }
 
 function ensureGraphFile() {
-  const GRAPH_PATH = graphPath();
-  const dir = path.dirname(GRAPH_PATH);
+  const p = graphPath();
+  const dir = path.dirname(p);
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(GRAPH_PATH)) fs.writeFileSync(GRAPH_PATH, '');
+  if (!fs.existsSync(p)) fs.writeFileSync(p, '');
 }
 
-/** Append an economy event to the graph store. */
 export function recordEvent(event) {
   ensureGraphFile();
-  const GRAPH_PATH = graphPath();
-  const line = JSON.stringify({
-    ...event,
-    recordedAt: new Date().toISOString(),
-  });
-  fs.appendFileSync(GRAPH_PATH, `${line}\n`);
+  const line = JSON.stringify({ ...event, recordedAt: new Date().toISOString() });
+  fs.appendFileSync(graphPath(), `${line}\n`);
 }
 
-/** Load all graph events. */
 export function loadEvents() {
   ensureGraphFile();
-  const GRAPH_PATH = graphPath();
-  const raw = fs.readFileSync(GRAPH_PATH, 'utf8').trim();
+  const raw = fs.readFileSync(graphPath(), 'utf8').trim();
   if (!raw) return [];
   return raw
     .split('\n')
@@ -52,9 +40,6 @@ export function loadEvents() {
     .filter(Boolean);
 }
 
-/**
- * Build aggregated graph snapshot for API/CLI output.
- */
 export function getGraphSnapshot({ topN = 10, sinceMs = null } = {}) {
   let events = loadEvents();
 
@@ -101,6 +86,7 @@ export function getGraphSnapshot({ topN = 10, sinceMs = null } = {}) {
         skillStats.set(event.rootSkillId, s);
       }
 
+      // only invocations count as earnings, payment events would double-count
       for (const entry of event.royaltyBreakdown || []) {
         const sid = entry.skillId;
         const amt = BigInt(entry.amountAtomic || '0');
@@ -120,12 +106,8 @@ export function getGraphSnapshot({ topN = 10, sinceMs = null } = {}) {
         }
         skillStats.set(sid, skill);
 
-        const creator = entry.creator;
-        if (creator && countAsEarning) {
-          creatorEarnings.set(
-            creator,
-            (creatorEarnings.get(creator) || 0n) + amt
-          );
+        if (entry.creator && countAsEarning) {
+          creatorEarnings.set(entry.creator, (creatorEarnings.get(entry.creator) || 0n) + amt);
         }
       }
 
@@ -191,11 +173,9 @@ export function getGraphSnapshot({ topN = 10, sinceMs = null } = {}) {
 }
 
 function formatUsdc(atomic) {
-  const n = Number(atomic) / 1e6;
-  return n.toFixed(6);
+  return (Number(atomic) / 1e6).toFixed(6);
 }
 
-/** Record a full trace result into the economy graph. */
 export function recordTraceResult(report) {
   recordEvent({
     type: 'invocation',
@@ -211,10 +191,7 @@ export function recordTraceResult(report) {
     timestamp: report.timestamp,
     totalAtomic: report.totalPaid.atomic,
     royaltyBreakdown: report.royaltyBreakdown,
-    edges: (report.dependencyTree?.edges || []).map((e) => ({
-      from: e.from,
-      to: e.to,
-    })),
+    edges: (report.dependencyTree?.edges || []).map((e) => ({ from: e.from, to: e.to })),
     payer: report.payer,
     dryRun: report.dryRun,
   });

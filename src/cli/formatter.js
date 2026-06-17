@@ -47,11 +47,11 @@ function formatTraceSummary(report) {
   // Layer status
   lines.push('  UPGRADE LAYERS');
   lines.push('  ─────────────────────────────────────────────────────────────');
-  lines.push('  [✓] Layer 1 — Full Dependency Tree Tracking');
+  lines.push('  [✓] Layer 1, Full Dependency Tree Tracking');
   lines.push(`       ${report.dependencyTree?.nodeCount || 0} skills in provenance graph`);
-  lines.push('  [✓] Layer 2 — Perpetual Royalties (on-chain registry)');
-  lines.push('  [✓] Layer 3 — Contribution-Weighted Splits');
-  lines.push('  [✓] Layer 4 — Public Skill Economy Graph');
+  lines.push('  [✓] Layer 2, Perpetual Royalties (on-chain registry)');
+  lines.push('  [✓] Layer 3, Contribution-Weighted Splits');
+  lines.push('  [✓] Layer 4, Public Skill Economy Graph');
   lines.push('');
 
   // Dependency tree

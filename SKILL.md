@@ -14,7 +14,7 @@ description: >
 
 ## INSTALL
 
-Official Pharos Skill Engine format — works with Claude Code, OpenClaw, and Codex:
+Official Pharos Skill Engine format, works with Claude Code, OpenClaw, and Codex:
 
 ```bash
 npx skills add https://github.com/darkfallX/pharos-inter-agent-revenue-fabric
@@ -24,7 +24,7 @@ npx skills add https://github.com/darkfallX/pharos-inter-agent-revenue-fabric
 
 Most skills charge end-users. This skill makes **agents pay each other**.
 
-When a song plays on Spotify, five parties get paid simultaneously — artist, songwriter, producer, label, publisher. Right now in the agent economy, when ten skills collaborate, only the top-level caller gets paid. This skill is the Spotify royalty system for the Pharos agent economy.
+When a song plays on Spotify, five parties get paid simultaneously, artist, songwriter, producer, label, publisher. Right now in the agent economy, when ten skills collaborate, only the top-level caller gets paid. This skill is the Spotify royalty system for the Pharos agent economy.
 
 It traces a recursive skill invocation graph, computes contribution-weighted royalties, simulates or settles x402 USDC payments, records verifiable provenance, and exposes a public Skill Economy Graph showing reuse, value flow, top earners, and proof activity.
 
@@ -39,18 +39,36 @@ Agent-callable functions:
 - **`getSkillEconomyGraph`** - Query foundational skills, top earners, gross volume, creator earnings, settled volume, value flow, and recent proof activity.
 - **`verifyPaymentProof`** - Verify Merkle provenance proofs from a proof bundle, graph event, transaction hash, or deployed registry record.
 - **`setRevenueSuccessor`** - Route future revenue to a successor skill when a skill is deprecated or replaced.
+- **`claimSkill`** - Bind a payout wallet to a skillId by signing a claim message, to collect royalties accrued against an unclaimed skill.
 - **`getWalletBalances`** - Query PHRS native and USDC balances before live routing.
 - **`listNetworks`** - Return configured Pharos networks from `networks.json`.
 
-Natural language triggers:
+### Integrations
 
-- Trace the revenue mesh for this skill call and route payments.
-- Show the full payment graph for this agent-to-agent invocation.
-- Calculate royalties across the skill dependency chain.
-- Verify this royalty proof.
-- Sign this Pharos call stack.
-- View the public Skill Economy Graph.
-- Register my skill with contribution weights.
+- **MCP server** (`mcp/server.js`): exposes `trace_revenue_mesh`, `get_economy_graph`, `verify_payment`, `register_skill`, `claim_skill`, `list_networks` as native tools for Claude Code / OpenClaw / Codex, zero dependencies, stdio.
+- **Drop-in middleware** (`pharos-inter-agent-revenue-fabric/integration`): any Pharos skill becomes royalty-aware in three lines, propagating `X-Pharos-Call-Stack` and reporting invocations.
+- **Registry seeding** (`npm run seed -- --github owner/repo`): imports real `SKILL.md` manifests from GitHub so the Skill Economy Graph maps the actual ecosystem.
+- **Signatures**: call-stack frames support `personal_sign` (default) and **EIP-712** typed data (`sigType: "eip712"`), chain-bound to Pharos.
+
+### Natural language
+
+The skill is driven in plain English three ways: by an MCP-connected agent
+(Claude Code / OpenClaw / Codex) that maps a request to the tools above; by the
+`ask` CLI command; or by the `/ask` endpoint and the dashboard's Ask box.
+
+```bash
+npm run ask -- "trace a 0.10 USDC payment through pharos-yield-pilot and pharos-realfi-security-scout"
+npm run ask -- "show me the top earners"
+curl localhost:4020/ask -H 'content-type: application/json' -d '{"text":"who is earning the most?"}'
+```
+
+Example phrasings → action:
+
+- "Trace a 0.10 USDC payment through A and B" → splits & routes royalties across the chain
+- "Show the economy graph / who is earning the most?" → returns the live graph
+- "Verify proof_abc…" → verifies a provenance proof
+- "Claim pharos-realfi-security-scout" → guides the wallet-signature claim
+- "Register my skill with weight 8000" → registers a skill
 
 ## WHY IT FITS PHAROS AGENT CARNIVAL
 

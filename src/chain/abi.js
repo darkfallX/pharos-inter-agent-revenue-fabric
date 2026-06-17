@@ -1,8 +1,3 @@
-/**
- * SkillRevenueFabric contract ABI.
- * On-chain registry for skill dependencies, contribution weights, and perpetual royalties.
- */
-
 export const SKILL_REVENUE_FABRIC_ABI = [
   {
     type: 'event',
@@ -20,6 +15,14 @@ export const SKILL_REVENUE_FABRIC_ABI = [
     inputs: [
       { name: 'skillId', type: 'bytes32', indexed: true },
       { name: 'successorId', type: 'bytes32', indexed: true },
+    ],
+  },
+  {
+    type: 'event',
+    name: 'SkillClaimed',
+    inputs: [
+      { name: 'skillId', type: 'bytes32', indexed: true },
+      { name: 'creator', type: 'address', indexed: true },
     ],
   },
   {
@@ -51,6 +54,13 @@ export const SKILL_REVENUE_FABRIC_ABI = [
       { name: 'skillId', type: 'bytes32' },
       { name: 'successorId', type: 'bytes32' },
     ],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'claimSkill',
+    inputs: [{ name: 'skillId', type: 'bytes32' }],
     outputs: [],
     stateMutability: 'nonpayable',
   },

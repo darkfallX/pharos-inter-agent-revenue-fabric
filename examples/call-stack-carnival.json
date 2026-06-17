@@ -1,0 +1,13 @@
+{
+  "version": "1",
+  "invocationId": "inv_carnival_real_ecosystem",
+  "timestamp": 1718900000000,
+  "note": "Real Pharos Agent Center preseason skills composed into a chain. Creators are omitted because these skills are UNCLAIMED, the trace computes each skill's royalty share, payments are skipped until the real builder binds a wallet via POST /claim. Featuring Darkfall_x's own RealFi Security Scout.",
+  "frames": [
+    { "skillId": "pharos-autonomous-execution-engine", "depth": 0 },
+    { "skillId": "pharos-strategy-composer", "depth": 1, "parentSkillId": "pharos-autonomous-execution-engine" },
+    { "skillId": "pharos-realfi-security-scout", "depth": 2, "parentSkillId": "pharos-strategy-composer" },
+    { "skillId": "pharos-contract-auditor", "depth": 3, "parentSkillId": "pharos-realfi-security-scout" },
+    { "skillId": "pharos-x402-skill", "depth": 4, "parentSkillId": "pharos-contract-auditor" }
+  ]
+}

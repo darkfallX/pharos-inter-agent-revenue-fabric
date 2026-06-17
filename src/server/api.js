@@ -1,7 +1,3 @@
-/**
- * Express server bootstrap — Pharos Skill Engine HTTP layer.
- */
-
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -9,6 +5,7 @@ import dotenv from 'dotenv';
 import { registerRoutes } from './routes.js';
 import { isRegistryDeployed } from '../chain/registry.js';
 import { CHAIN_META, PHAROS_CHAIN_ID } from '../chain/chains.js';
+import { seedGraphIfEmpty } from '../core/seed-graph.js';
 
 dotenv.config();
 
@@ -17,11 +14,10 @@ const __dirname = path.dirname(__filename);
 
 function isMainModule() {
   if (!process.argv[1]) return false;
-  const entry = path.resolve(process.argv[1]);
-  const self = path.resolve(__filename);
-  return entry === self || entry.endsWith('api.js');
+  return path.resolve(process.argv[1]) === path.resolve(__filename) || process.argv[1].endsWith('api.js');
 }
 
+// default to dry-run when no wallet is configured, so the server is safe to run as-is
 if (process.env.DRY_RUN === undefined && !process.env.PRIVATE_KEY) {
   process.env.DRY_RUN = 'true';
 }
@@ -35,7 +31,6 @@ app.use(express.json({ limit: '1mb' }));
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
-  // CORS: public read API consumed by dashboards and agent runtimes
   res.setHeader('Access-Control-Allow-Origin', process.env.CORS_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Pharos-Call-Stack');
@@ -49,8 +44,7 @@ app.get('/', (_req, res) => {
     skill: 'pharos-inter-agent-revenue-fabric',
     version: '1.1.0',
     status: 'live',
-    description:
-      'Inter-agent revenue mesh for the Pharos AI economy — agents paying agents via x402 USDC royalties.',
+    description: 'Inter-agent revenue mesh for the Pharos AI economy, agents paying agents via x402 USDC royalties.',
     chainId: PHAROS_CHAIN_ID,
     chain: CHAIN_META.name,
     dashboard: '/dashboard',
@@ -60,6 +54,8 @@ app.get('/', (_req, res) => {
       graph: 'GET /graph',
       verifyPayment: 'POST /verify-payment',
       register: 'POST /register',
+      claim: 'POST /claim',
+      ask: 'POST /ask',
       openapi: 'GET /openapi.yaml',
     },
     repository: 'https://github.com/darkfallX/pharos-inter-agent-revenue-fabric',
@@ -77,12 +73,17 @@ app.use((err, _req, res, _next) => {
 function startServer() {
   const server = app.listen(PORT, HOST, () => {
     console.log('Pharos Inter-Agent Revenue Fabric API');
-    console.log(`  Chain:    Pharos Mainnet (${PHAROS_CHAIN_ID})`);
+    console.log(`  Chain:    ${CHAIN_META.name} (${PHAROS_CHAIN_ID})`);
     console.log(`  Listen:   http://${HOST}:${PORT}`);
     console.log(`  Health:   http://127.0.0.1:${PORT}/health`);
     console.log(`  OpenAPI:  http://127.0.0.1:${PORT}/openapi.yaml`);
     console.log(`  Dry-run:  ${process.env.DRY_RUN !== 'false'}`);
     console.log(`  Registry: ${isRegistryDeployed() ? CHAIN_META.registry : 'DEMO_REGISTRY'}`);
+    // populate an empty graph in the background so fresh deploys aren't blank
+    setImmediate(() => {
+      const r = seedGraphIfEmpty();
+      if (r.seeded) console.log(`  Seeded:   ${r.seeded} demo invocations into an empty graph`);
+    });
   });
 
   server.on('error', (err) => {
@@ -95,7 +96,7 @@ function startServer() {
   });
 
   const shutdown = (signal) => {
-    console.log(`\n${signal} — shutting down`);
+    console.log(`\n${signal}, shutting down`);
     server.close(() => process.exit(0));
     setTimeout(() => process.exit(1), 5000);
   };

@@ -1,9 +1,5 @@
 #!/usr/bin/env node
-/**
- * Pharos Inter-Agent Revenue Fabric — Skill Engine CLI
- *
- * Commands: trace | register | graph | balance | verify | inherit | networks
- */
+// CLI: trace | register | graph | balance | verify | sign-stack | inherit | networks
 
 import fs from 'fs';
 import path from 'path';
@@ -15,6 +11,7 @@ import {
   setSuccessor,
   getGraphSnapshot,
 } from '../src/core/fabric.js';
+import { parseIntent, buildCallStackFromSkills } from '../src/cli/nl.js';
 import { getWalletBalances } from '../src/chain/balances.js';
 import { CHAIN_META } from '../src/chain/chains.js';
 import { isRegistryDeployed } from '../src/chain/registry.js';
@@ -97,7 +94,7 @@ async function cmdTrace(opts) {
   }
 
   if (dryRun) {
-    printTip('Dry-run mode — no USDC sent. Remove --dry-run + set PRIVATE_KEY for live x402 routing.');
+    printTip('Dry-run mode, no USDC sent. Remove --dry-run + set PRIVATE_KEY for live x402 routing.');
   }
 
   const report = await traceAndRoute({
@@ -209,7 +206,7 @@ async function cmdBalance(opts) {
     ]);
     console.log('');
     if (parseFloat(balances.usdc.amount) === 0) {
-      printTip('Zero USDC — use dry-run mode (npm run demo) or fund wallet for live x402 routing.');
+      printTip('Zero USDC, use dry-run mode (npm run demo) or fund wallet for live x402 routing.');
     }
   } catch (err) {
     printError(err.message, 'Check PHAROS_RPC in .env or networks.json');
@@ -242,7 +239,7 @@ async function cmdVerify(opts) {
   printDivider('Payment Verification');
   printKeyValue([
     ['Valid', result.valid ? 'YES ✓' : 'NO ✗'],
-    ['Proof ID', result.proofId || proofId || '—'],
+    ['Proof ID', result.proofId || proofId || ', '],
     ['Issues', result.issues?.join(', ') || 'none'],
   ]);
   console.log('');
@@ -322,12 +319,42 @@ function cmdNetworks() {
   printTip('Switch network: PHAROS_NETWORK=pharos-atlantic node scripts/trace-fabric.js ...');
 }
 
+async function cmdAsk(opts) {
+  printWelcome('ask');
+  const text = (opts._.join(' ') || opts.text || '').trim();
+  if (!text) {
+    printError('Ask what?', 'Example: ask "trace a 0.10 USDC payment through pharos-yield-pilot and pharos-realfi-security-scout"');
+    process.exit(1);
+  }
+
+  const known = getGraphSnapshot({ topN: 50 }).foundationalSkills.map((s) => s.skillId);
+  const intent = parseIntent(text, known);
+  printTip(`Understood → ${intent.explanation}`);
+
+  if (intent.action === 'trace') {
+    const report = await traceAndRoute({
+      rootSkillId: intent.rootSkillId,
+      amountUsdc: intent.amountUsdc,
+      callStack: buildCallStackFromSkills(intent.skills),
+      dryRun: opts['dry-run'] || process.env.DRY_RUN === 'true',
+    });
+    console.log(opts.json ? JSON.stringify(report, null, 2) : formatCliSummary(report));
+  } else if (intent.action === 'graph') {
+    console.log(formatCliSummary({ graphSnapshot: getGraphSnapshot({ topN: 10 }), mode: 'graph' }));
+  } else if (intent.action === 'verify' && (intent.proofId || intent.txHash)) {
+    console.log(JSON.stringify(await verifyPayment({ proofId: intent.proofId, txHash: intent.txHash }), null, 2));
+  } else {
+    printTip('Run without arguments for the full command list.');
+  }
+}
+
 async function main() {
   const opts = parseArgs(args);
 
   try {
     switch (command) {
       case 'trace': await cmdTrace(opts); break;
+      case 'ask': await cmdAsk(opts); break;
       case 'register': await cmdRegister(opts); break;
       case 'graph': await cmdGraph(opts); break;
       case 'balance': await cmdBalance(opts); break;

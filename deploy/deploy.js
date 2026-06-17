@@ -1,16 +1,6 @@
 #!/usr/bin/env node
-/**
- * Deploy SkillRevenueFabric to Pharos Mainnet (Chain ID 1672).
- *
- * Usage:
- *   node deploy/deploy.js
- *   npm run deploy
- *
- * Requires:
- *   PRIVATE_KEY in .env
- *
- * On success, updates FABRIC_REGISTRY_ADDRESS in .env automatically.
- */
+// Deploy SkillRevenueFabric to the active Pharos network (solc + viem, no Foundry).
+// Needs PRIVATE_KEY; writes the deployed address back to .env.
 
 import fs from 'fs';
 import path from 'path';
@@ -22,7 +12,7 @@ import {
   http,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { pharosMainnet, PHAROS_CHAIN_ID, PHAROS_RPC } from '../src/chain/chains.js';
+import { activeChain, PHAROS_CHAIN_ID, PHAROS_RPC, BLOCK_EXPLORER, CHAIN_META } from '../src/chain/chains.js';
 import { compileSkillRevenueFabric } from './compile.js';
 
 dotenv.config();
@@ -41,7 +31,6 @@ function requirePrivateKey() {
   return key.startsWith('0x') ? key : `0x${key}`;
 }
 
-/** Patch or append FABRIC_REGISTRY_ADDRESS in .env */
 function updateEnvAddress(address) {
   let content = '';
   if (fs.existsSync(ENV_PATH)) {
@@ -63,7 +52,7 @@ function updateEnvAddress(address) {
 }
 
 async function main() {
-  console.log('SkillRevenueFabric — Pharos Mainnet Deploy');
+  console.log(`SkillRevenueFabric, ${CHAIN_META.name} Deploy`);
   console.log('───────────────────────────────────────────');
   console.log(`Chain ID: ${PHAROS_CHAIN_ID}`);
   console.log(`RPC:      ${PHAROS_RPC}`);
@@ -72,32 +61,31 @@ async function main() {
   const account = privateKeyToAccount(privateKey);
 
   const publicClient = createPublicClient({
-    chain: pharosMainnet,
+    chain: activeChain,
     transport: http(),
   });
 
   const walletClient = createWalletClient({
     account,
-    chain: pharosMainnet,
+    chain: activeChain,
     transport: http(),
   });
 
-  // Preflight checks
   const block = await publicClient.getBlockNumber();
   const balance = await publicClient.getBalance({ address: account.address });
   console.log(`\nWallet:  ${account.address}`);
   console.log(`Block:   ${block}`);
-  console.log(`Balance: ${balance} wei (PHRS)`);
+  console.log(`Balance: ${balance} wei (${activeChain.nativeCurrency.symbol})`);
 
   if (balance === 0n) {
-    console.warn('\n⚠ Warning: wallet has zero PHRS — deployment may fail without gas.');
+    console.warn(`\n⚠ Warning: wallet has zero ${activeChain.nativeCurrency.symbol}, deployment may fail without gas.`);
   }
 
   console.log('\nCompiling SkillRevenueFabric.sol...');
   const { abi, bytecode } = compileSkillRevenueFabric();
   console.log(`Bytecode: ${bytecode.length} chars`);
 
-  console.log('\nDeploying to Pharos Mainnet...');
+  console.log(`\nDeploying to ${CHAIN_META.name}...`);
   const hash = await walletClient.deployContract({
     abi,
     bytecode,
@@ -119,11 +107,10 @@ async function main() {
   console.log('\n🎉 Deployment successful!');
   console.log(`   Contract: ${address}`);
   console.log(`   Block:    ${receipt.blockNumber}`);
-  console.log(`   Explorer: https://pharosscan.xyz/address/${address}`);
+  console.log(`   Explorer: ${(BLOCK_EXPLORER || 'https://pharosscan.xyz')}/address/${address}`);
 
   updateEnvAddress(address);
 
-  // Write artifact for reference
   const artifactDir = path.join(ROOT, 'deploy', 'artifacts');
   if (!fs.existsSync(artifactDir)) fs.mkdirSync(artifactDir, { recursive: true });
   fs.writeFileSync(

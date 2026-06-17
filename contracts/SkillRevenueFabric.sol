@@ -1,13 +1,9 @@
 // SPDX-License-Identifier: MIT-0
 pragma solidity ^0.8.24;
 
-/**
- * @title SkillRevenueFabric
- * @notice On-chain registry for Pharos Inter-Agent Revenue Fabric.
- *         Layer 2: Perpetual royalties — splits apply forever to dependent skills.
- *         Layer 3: Contribution-weighted registration at skill publish time.
- * @dev Deploy to Pharos Mainnet (Chain ID 1672).
- */
+/// @title SkillRevenueFabric
+/// @notice On-chain registry of skills, contribution weights, perpetual royalties,
+///         and Merkle-rooted payment proofs for the Pharos Revenue Fabric.
 contract SkillRevenueFabric {
     struct Skill {
         address creator;
@@ -28,9 +24,8 @@ contract SkillRevenueFabric {
         uint256 contributionWeight,
         uint256 royaltyBps
     );
-
     event SuccessorSet(bytes32 indexed skillId, bytes32 indexed successorId);
-
+    event SkillClaimed(bytes32 indexed skillId, address indexed creator);
     event RoyaltyPaymentRecorded(
         bytes32 indexed invocationId,
         bytes32 indexed rootSkillId,
@@ -45,13 +40,7 @@ contract SkillRevenueFabric {
     error NotCreator();
     error ArrayLengthMismatch();
 
-    /**
-     * @notice Register a skill with contribution weight and perpetual royalty rate.
-     * @param skillId Unique skill identifier (keccak256 of normalized name).
-     * @param contributionWeight Creator-declared weight in basis points (1-10000).
-     * @param deps Dependency skill IDs for composability graph.
-     * @param royaltyBps Perpetual royalty rate in basis points (max 2000 = 20%).
-     */
+    /// @notice Register a skill with a contribution weight and perpetual royalty rate.
     function registerSkill(
         bytes32 skillId,
         uint256 contributionWeight,
@@ -75,9 +64,7 @@ contract SkillRevenueFabric {
         emit SkillRegistered(skillId, msg.sender, contributionWeight, royaltyBps);
     }
 
-    /**
-     * @notice Set a successor skill for revenue inheritance (optional).
-     */
+    /// @notice Set a successor skill for revenue inheritance.
     function setSuccessor(bytes32 skillId, bytes32 successorId) external {
         if (!skills[skillId].active) revert SkillNotFound();
         if (skills[skillId].creator != msg.sender) revert NotCreator();
@@ -86,9 +73,24 @@ contract SkillRevenueFabric {
         emit SuccessorSet(skillId, successorId);
     }
 
-    /**
-     * @notice Resolve the effective creator, following successor chain.
-     */
+    /// @notice Bind msg.sender as a skill's payout creator. Binds an unregistered
+    ///         skillId on first claim; a registered skill is re-bound only by its creator.
+    function claimSkill(bytes32 skillId) external {
+        Skill storage s = skills[skillId];
+        if (!s.active) {
+            s.creator = msg.sender;
+            s.contributionWeight = 5000;
+            s.royaltyBps = 500;
+            s.active = true;
+            emit SkillRegistered(skillId, msg.sender, 5000, 500);
+        } else {
+            if (s.creator != address(0) && s.creator != msg.sender) revert NotCreator();
+            s.creator = msg.sender;
+        }
+        emit SkillClaimed(skillId, msg.sender);
+    }
+
+    /// @notice Resolve the effective creator, following the successor chain.
     function resolveCreator(bytes32 skillId) external view returns (address) {
         if (!skills[skillId].active) revert SkillNotFound();
 
@@ -120,9 +122,7 @@ contract SkillRevenueFabric {
         return dependencies[skillId];
     }
 
-    /**
-     * @notice Record a royalty payment batch with merkle provenance root.
-     */
+    /// @notice Record a royalty payment batch and store its Merkle provenance root.
     function recordRoyaltyPayment(
         bytes32 invocationId,
         bytes32 rootSkillId,
@@ -142,11 +142,7 @@ contract SkillRevenueFabric {
         emit RoyaltyPaymentRecorded(invocationId, rootSkillId, total, merkleRoot);
     }
 
-    function verifyPaymentProof(bytes32 invocationId, bytes32 merkleRoot)
-        external
-        view
-        returns (bool)
-    {
+    function verifyPaymentProof(bytes32 invocationId, bytes32 merkleRoot) external view returns (bool) {
         return paymentProofs[invocationId] == merkleRoot;
     }
 }

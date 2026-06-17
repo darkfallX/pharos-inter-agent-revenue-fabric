@@ -1,7 +1,4 @@
-/**
- * Compile SkillRevenueFabric.sol using solc (no Foundry required).
- */
-
+// Compile SkillRevenueFabric.sol with solc (no Foundry required).
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -41,7 +38,7 @@ export function compileSkillRevenueFabric() {
 
   const contract = compiled.contracts['SkillRevenueFabric.sol']?.SkillRevenueFabric;
   if (!contract?.abi || !contract?.evm?.bytecode?.object) {
-    throw new Error('Compilation failed — no bytecode produced');
+    throw new Error('Compilation failed, no bytecode produced');
   }
 
   const bytecode = `0x${contract.evm.bytecode.object}`;

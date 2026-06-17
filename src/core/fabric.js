@@ -1,12 +1,3 @@
-/**
- * Pharos Inter-Agent Revenue Fabric — Core Engine
- *
- * Layer 1: Full dependency tree tracking via call-stack headers
- * Layer 2: Perpetual royalties from on-chain registry
- * Layer 3: Contribution-weighted dynamic splits
- * Layer 4: Economy graph recording
- */
-
 import dotenv from 'dotenv';
 import { PHAROS_CHAIN_ID } from '../chain/chains.js';
 import {
@@ -14,6 +5,7 @@ import {
   expandDependencyTree,
   registerSkill,
   setSuccessor,
+  claimSkill,
   getWalletClient,
   recordPaymentProof,
   verifyRecordedPaymentProof,
@@ -33,26 +25,22 @@ dotenv.config();
 const DEPTH_DECAY = parseFloat(process.env.DEPTH_DECAY || '0.85');
 const SCHEMA_VERSION = '1.1.0';
 
-/**
- * Parse call stack from JSON object, file contents, or base64 header.
- */
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
 export function parseCallStack(input) {
   if (!input) return { version: '1', frames: [] };
 
   if (typeof input === 'string') {
-    // Try base64 header decode
     try {
       const decoded = Buffer.from(input, 'base64').toString('utf8');
       const parsed = JSON.parse(decoded);
       if (parsed.frames) return normalizeCallStack(parsed);
     } catch {
-      /* not base64 */
+      // not base64, fall through to inline JSON
     }
 
-    // Try inline JSON
     try {
-      const parsed = JSON.parse(input);
-      return normalizeCallStack(parsed);
+      return normalizeCallStack(JSON.parse(input));
     } catch {
       throw new Error('Invalid call stack: expected JSON object or base64 header');
     }
@@ -79,17 +67,13 @@ function normalizeCallStack(stack) {
   };
 }
 
-/**
- * Merge call-stack frames with on-chain registry data to build full dependency tree.
- * Layer 1: recursive composability chain resolution.
- */
 export async function buildDependencyTree(rootSkillId, callStack) {
   const onChainTree = await expandDependencyTree(rootSkillId);
 
   const nodes = [];
   const seen = new Set();
 
-  // Include call-stack frames first (live invocation context)
+  // Live call-stack frames take precedence over the registry.
   for (const frame of callStack.frames) {
     if (seen.has(frame.skillId)) continue;
     seen.add(frame.skillId);
@@ -108,7 +92,6 @@ export async function buildDependencyTree(rootSkillId, callStack) {
     });
   }
 
-  // Augment with on-chain dependency tree
   for (const node of onChainTree.nodes) {
     if (seen.has(node.skillId)) continue;
     seen.add(node.skillId);
@@ -119,7 +102,6 @@ export async function buildDependencyTree(rootSkillId, callStack) {
     });
   }
 
-  // Ensure root is present
   if (!seen.has(rootSkillId)) {
     const root = await getSkill(rootSkillId);
     if (root) {
@@ -159,25 +141,18 @@ export async function buildDependencyTree(rootSkillId, callStack) {
   };
 }
 
-/**
- * Calculate contribution-weighted, depth-decayed royalty splits.
- * Layer 2 (perpetual royaltyBps) + Layer 3 (contributionWeight).
- */
 export function calculateRoyaltyBreakdown(dependencyTree, totalAtomic) {
   const total = BigInt(totalAtomic);
   const { nodes } = dependencyTree;
 
-  if (!nodes.length) {
-    return [];
-  }
+  if (!nodes.length) return [];
 
-  // Compute raw weights: depthDecay * contributionFactor * (1 + perpetualRoyalty)
+  // weight = depth decay * contribution share * perpetual royalty boost
   const rawWeights = nodes.map((node) => {
     const depthWeight = Math.pow(DEPTH_DECAY, node.depth);
     const contributionFactor = (node.contributionWeight || 5000) / 10000;
     const perpetualBoost = 1 + (node.royaltyBps || 0) / 10000;
-    const raw = depthWeight * contributionFactor * perpetualBoost;
-    return { node, raw, depthWeight, contributionFactor, perpetualBoost };
+    return { node, raw: depthWeight * contributionFactor * perpetualBoost, depthWeight };
   });
 
   const sumRaw = rawWeights.reduce((s, w) => s + w.raw, 0) || 1;
@@ -200,11 +175,8 @@ export function calculateRoyaltyBreakdown(dependencyTree, totalAtomic) {
     };
   });
 
-  // Distribute rounding dust to root skill creator
-  const distributed = breakdown.reduce(
-    (s, e) => s + BigInt(e.amountAtomic),
-    0n
-  );
+  // rounding dust goes to the root creator so the split always sums to total
+  const distributed = breakdown.reduce((s, e) => s + BigInt(e.amountAtomic), 0n);
   const dust = total - distributed;
   if (dust > 0n && breakdown.length) {
     breakdown[0].amountAtomic = (BigInt(breakdown[0].amountAtomic) + dust).toString();
@@ -214,9 +186,6 @@ export function calculateRoyaltyBreakdown(dependencyTree, totalAtomic) {
   return breakdown;
 }
 
-/**
- * Full trace + optional payment routing pipeline.
- */
 export async function traceAndRoute({
   rootSkillId,
   amountUsdc,
@@ -234,10 +203,7 @@ export async function traceAndRoute({
     throw new Error('amountUsdc must be greater than zero');
   }
 
-  const callStackVerification = await verifyCallStackFrames(
-    callStack.frames,
-    invocationId
-  );
+  const callStackVerification = await verifyCallStackFrames(callStack.frames, invocationId);
   callStackVerification.required = Boolean(requireFrameSignatures);
   if (requireFrameSignatures && !callStackVerification.valid) {
     throw new Error(
@@ -266,10 +232,11 @@ export async function traceAndRoute({
         totalPaidAtomic: result.totalPaidAtomic,
       };
     } catch (err) {
+      // live settlement failed, degrade to a dry run rather than erroring out
       paymentError = err.message;
       effectiveDryRun = true;
       const result = await routeRoyaltyPayments(royaltyBreakdown, { dryRun: true });
-      payer = payerOverride || result.payer || '0x0000000000000000000000000000000000000000';
+      payer = payerOverride || result.payer || ZERO_ADDRESS;
       payments = result.payments;
       paymentSettlement = {
         mode: result.settlementMode,
@@ -281,7 +248,7 @@ export async function traceAndRoute({
     }
   } else {
     const result = await routeRoyaltyPayments(royaltyBreakdown, { dryRun: true });
-    payer = payerOverride || result.payer || '0x0000000000000000000000000000000000000000';
+    payer = payerOverride || result.payer || ZERO_ADDRESS;
     payments = result.payments;
     paymentSettlement = {
       mode: result.settlementMode,
@@ -303,10 +270,9 @@ export async function traceAndRoute({
   if (signProof && !effectiveDryRun && process.env.PRIVATE_KEY) {
     try {
       const wallet = getWalletClient();
-      const sig = await signProvenanceProof(wallet, provenanceProof);
-      provenanceProof.signatures = [sig];
+      provenanceProof.signatures = [await signProvenanceProof(wallet, provenanceProof)];
     } catch {
-      /* signing optional */
+      // signing is optional
     }
   }
 
@@ -327,8 +293,6 @@ export async function traceAndRoute({
     }
   }
 
-  let graphSnapshot = null;
-
   const report = {
     schemaVersion: SCHEMA_VERSION,
     skill: 'pharos-inter-agent-revenue-fabric',
@@ -340,10 +304,7 @@ export async function traceAndRoute({
     callStackVerification,
     dependencyTree,
     royaltyBreakdown,
-    totalPaid: {
-      usdc: amountUsdc.toString(),
-      atomic: totalAtomic.toString(),
-    },
+    totalPaid: { usdc: amountUsdc.toString(), atomic: totalAtomic.toString() },
     payer,
     payments,
     paymentSettlement,
@@ -351,7 +312,7 @@ export async function traceAndRoute({
     provenanceProof,
     onChainProofRecord,
     proofRecordError,
-    graphSnapshot,
+    graphSnapshot: null,
     layers: {
       dependencyTracking: true,
       perpetualRoyalties: true,
@@ -367,9 +328,6 @@ export async function traceAndRoute({
   return report;
 }
 
-/**
- * Verify a payment proof by proofId or txHash against graph history.
- */
 export async function verifyPayment({ proofId, txHash, royaltyBreakdown, proof }) {
   if (proof && royaltyBreakdown) {
     const local = await verifyProvenanceProof(proof, royaltyBreakdown);
@@ -379,12 +337,7 @@ export async function verifyPayment({ proofId, txHash, royaltyBreakdown, proof }
         ? await verifyRecordedPaymentProof({
             invocationId: proof.invocationId,
             merkleRoot: proof.merkleRoot,
-          }).catch((err) => ({
-            checked: false,
-            valid: null,
-            mode: 'error',
-            message: err.message,
-          }))
+          }).catch((err) => ({ checked: false, valid: null, mode: 'error', message: err.message }))
         : { checked: false, valid: null, mode: 'missing-invocation' },
     };
   }
@@ -393,36 +346,27 @@ export async function verifyPayment({ proofId, txHash, royaltyBreakdown, proof }
 
   let matchedEvent = null;
   if (proofId) {
-    matchedEvent = events.find(
-      (e) => e.proofId === proofId || e.invocationId === proofId
-    );
+    matchedEvent = events.find((e) => e.proofId === proofId || e.invocationId === proofId);
   }
   if (!matchedEvent && txHash) {
-    matchedEvent = events.find(
-      (e) => e.txHashes?.includes(txHash) || e.txHash === txHash
-    );
+    matchedEvent = events.find((e) => e.txHashes?.includes(txHash) || e.txHash === txHash);
   }
 
   if (matchedEvent?.royaltyBreakdown) {
-    const proof = {
+    const matchedProof = {
       proofId: matchedEvent.proofId || proofId,
       invocationId: matchedEvent.invocationId,
       merkleRoot: matchedEvent.merkleRoot,
       signatures: matchedEvent.signatures || [],
     };
-    const local = await verifyProvenanceProof(proof, matchedEvent.royaltyBreakdown);
+    const local = await verifyProvenanceProof(matchedProof, matchedEvent.royaltyBreakdown);
     return {
       ...local,
       onChain: matchedEvent.merkleRoot
         ? await verifyRecordedPaymentProof({
             invocationId: matchedEvent.invocationId,
             merkleRoot: matchedEvent.merkleRoot,
-          }).catch((err) => ({
-            checked: false,
-            valid: null,
-            mode: 'error',
-            message: err.message,
-          }))
+          }).catch((err) => ({ checked: false, valid: null, mode: 'error', message: err.message }))
         : { checked: false, valid: null, mode: 'missing-merkle-root' },
     };
   }
@@ -440,9 +384,4 @@ export async function verifyPayment({ proofId, txHash, royaltyBreakdown, proof }
   };
 }
 
-export {
-  registerSkill,
-  setSuccessor,
-  getGraphSnapshot,
-  SCHEMA_VERSION,
-};
+export { registerSkill, setSuccessor, claimSkill, getGraphSnapshot, SCHEMA_VERSION };

@@ -1,5 +1,5 @@
 /**
- * Wallet balance queries — PHRS native + USDC on Pharos.
+ * Wallet balance queries, PHRS native + USDC on Pharos.
  */
 
 import { formatUnits } from 'viem';
